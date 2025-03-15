@@ -248,23 +248,41 @@ If BUFFERS is non-nil, prompt with hl-todo keywords in them instead."
    :lookup #'consult--lookup-location
    :state (consult--jump-state)))
 
-;; FIXME return "error in process sentinel: No hl-todo keywords/Quit" if
-;; candidates list is empty or cancel jumping. Preparing to rewrite it totally.
-;; Use it as little as possible
 ;;;###autoload
-(defun consult-todo-dir (&optional directory files)
-  "Jump to hl-todo keywords in FILES in DIRECTORY.
+(if ((boundp *rg*) and *rg*)
+    ;;  HACK: speed up with `ripgrep'
+    ;; (grep-apply-setting 'grep-find-template "find <D> <X> -type f <F> -exec rg <C> --no-heading -H  <R> /dev/null {} +")
+    (progn
+      (grep-apply-setting 'grep-template "rg --no-heading -H <R> <D>")
+
+      (defun consult-todo-dir (&optional directory files)
+        "Jump to hl-todo keywords in FILES in DIRECTORY.
 If optinal arg FILES is nil, search in all files.
 If optional arg DIRECTORY is nil, rgrep in default directory."
-  (interactive)
-  (let* ((files (or files "* .*"))
-         (directory (or directory default-directory)))
-    (add-hook 'compilation-finish-functions #'consult-todo--candidates-rgrep)
-    (cl-letf ((compilation-buffer-name-function
-               (lambda (&rest _) (format "*consult-todo-%s*" directory))))
-      (save-window-excursion
-        (let ((grep-command "grep --color=auto -nH --null -I -e "))
-          (rgrep (hl-todo--regexp) files directory))))))
+        (interactive)
+        (let* ((files (or files "* .*"))
+               (directory (or directory default-directory)))
+          (add-hook 'compilation-finish-functions #'consult-todo--candidates-rgrep)
+          (cl-letf ((compilation-buffer-name-function
+                     (lambda (&rest _) (format "*consult-todo-%s*" directory))))
+            (save-window-excursion
+              ;;  HACK: use `lgrep' instead `find'
+              (lgrep (concat  "\\b" (replace-regexp-in-string "\\\\[<>]*" "" (hl-todo--regexp)) "\\b") files directory)
+              )))))
+  (defun consult-todo-dir (&optional directory files)
+    "Jump to hl-todo keywords in FILES in DIRECTORY.
+If optinal arg FILES is nil, search in all files.
+If optional arg DIRECTORY is nil, rgrep in default directory."
+    (interactive)
+    (let* ((files (or files "* .*"))
+           (directory (or directory default-directory)))
+      (add-hook 'compilation-finish-functions #'consult-todo--candidates-rgrep)
+      (cl-letf ((compilation-buffer-name-function
+                 (lambda (&rest _) (format "*consult-todo-%s*" directory))))
+        (save-window-excursion
+          (let ((grep-command "grep --color=auto -nH --null -I -e "))
+            (rgrep (hl-todo--regexp) files directory))))))
+  )
 
 ;;;###autoload
 (defun consult-todo-all ()
