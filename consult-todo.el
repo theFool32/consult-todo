@@ -64,6 +64,11 @@ Only effective on buffers."
   :type 'boolean
   :group 'consult-todo)
 
+(defcustom consult-todo-use-rg (if (executable-find "rg") t nil)
+  "If non-nil, use `rg' to search keywords in directory."
+  :type 'boolean
+  :group 'consult-todo)
+
 (defcustom consult-todo-dir-preview-key nil
   "Preview trigger keys for `consult-todo-dir' related command.
 Value can be nil, `any', a single key or a list of keys."
@@ -249,40 +254,53 @@ If BUFFERS is non-nil, prompt with hl-todo keywords in them instead."
    :state (consult--jump-state)))
 
 ;;;###autoload
-(if ((boundp *rg*) and *rg*)
-    ;;  HACK: speed up with `ripgrep'
-    ;; (grep-apply-setting 'grep-find-template "find <D> <X> -type f <F> -exec rg <C> --no-heading -H  <R> /dev/null {} +")
-    (progn
-      (grep-apply-setting 'grep-template "rg --no-heading -H <R> <D>")
-
-      (defun consult-todo-dir (&optional directory files)
-        "Jump to hl-todo keywords in FILES in DIRECTORY.
+(defun consult-todo-dir (&optional directory files)
+  "Jump to hl-todo keywords in FILES in DIRECTORY.
 If optinal arg FILES is nil, search in all files.
 If optional arg DIRECTORY is nil, rgrep in default directory."
-        (interactive)
-        (let* ((files (or files "* .*"))
-               (directory (or directory default-directory)))
-          (add-hook 'compilation-finish-functions #'consult-todo--candidates-rgrep)
-          (cl-letf ((compilation-buffer-name-function
-                     (lambda (&rest _) (format "*consult-todo-%s*" directory))))
-            (save-window-excursion
-              ;;  HACK: use `lgrep' instead `find'
-              (lgrep (concat  "\\b" (replace-regexp-in-string "\\\\[<>]*" "" (hl-todo--regexp)) "\\b") files directory)
-              )))))
-  (defun consult-todo-dir (&optional directory files)
-    "Jump to hl-todo keywords in FILES in DIRECTORY.
-If optinal arg FILES is nil, search in all files.
-If optional arg DIRECTORY is nil, rgrep in default directory."
-    (interactive)
-    (let* ((files (or files "* .*"))
-           (directory (or directory default-directory)))
-      (add-hook 'compilation-finish-functions #'consult-todo--candidates-rgrep)
-      (cl-letf ((compilation-buffer-name-function
-                 (lambda (&rest _) (format "*consult-todo-%s*" directory))))
-        (save-window-excursion
+  (interactive)
+  (let* ((files (or files "* .*"))
+         (directory (or directory default-directory)))
+    (add-hook 'compilation-finish-functions #'consult-todo--candidates-rgrep)
+    (cl-letf ((compilation-buffer-name-function
+               (lambda (&rest _) (format "*consult-todo-%s*" directory))))
+      (save-window-excursion
+        ;;  HACK: use `lgrep' instead `find'
+        (if consult-todo-use-rg
+            (let ((grep-template))
+              (grep-apply-setting 'grep-template "rg --no-heading -H <R> <D>")
+              (lgrep (concat  "\\b" (replace-regexp-in-string "\\\\[<>]*" "" (hl-todo--regexp)) "\\b") files directory))
           (let ((grep-command "grep --color=auto -nH --null -I -e "))
-            (rgrep (hl-todo--regexp) files directory))))))
+            (rgrep (hl-todo--regexp) files directory)))
+        )))
   )
+
+
+;; (if ((boundp *rg*) and *rg*)
+;;     ;;  HACK: speed up with `ripgrep'
+;;     ;; (grep-apply-setting 'grep-find-template "find <D> <X> -type f <F> -exec rg <C> --no-heading -H  <R> /dev/null {} +")
+;;     (progn
+;;       (grep-apply-setting 'grep-template "rg --no-heading -H <R> <D>")
+
+;;       (defun consult-todo-dir (&optional directory files)
+;;         "Jump to hl-todo keywords in FILES in DIRECTORY.
+;; If optinal arg FILES is nil, search in all files.
+;; If optional arg DIRECTORY is nil, rgrep in default directory."
+;;         (interactive)
+;;         ))
+;;   (defun consult-todo-dir (&optional directory files)
+;;     "Jump to hl-todo keywords in FILES in DIRECTORY.
+;; If optinal arg FILES is nil, search in all files.
+;; If optional arg DIRECTORY is nil, rgrep in default directory."
+;;     (interactive)
+;;     (let* ((files (or files "* .*"))
+;;            (directory (or directory default-directory)))
+;;       (add-hook 'compilation-finish-functions #'consult-todo--candidates-rgrep)
+;;       (cl-letf ((compilation-buffer-name-function
+;;                  (lambda (&rest _) (format "*consult-todo-%s*" directory))))
+;;         (save-window-excursion
+;;           ))))
+;;   )
 
 ;;;###autoload
 (defun consult-todo-all ()
